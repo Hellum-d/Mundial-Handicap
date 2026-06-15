@@ -5,7 +5,19 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from football_predictor.data.confederations import confederation_of
 from football_predictor.data.real_data import classify_tournament, process
+
+
+def test_confederation_of_mapping():
+    assert confederation_of("Brazil") == "CONMEBOL"
+    assert confederation_of("Germany") == "UEFA"
+    assert confederation_of("United States") == "CONCACAF"
+    assert confederation_of("Senegal") == "CAF"
+    assert confederation_of("Japan") == "AFC"
+    assert confederation_of("New Zealand") == "OFC"
+    # Unmapped teams fall back to OTHER.
+    assert confederation_of("Atlantis") == "OTHER"
 
 
 def test_classify_tournament_priorities():

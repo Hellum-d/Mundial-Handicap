@@ -26,6 +26,7 @@ import pandas as pd
 from scipy.optimize import minimize
 
 from football_predictor import config
+from football_predictor.data.confederations import confederation_of
 from football_predictor.models.base_model import BaseModel, OutcomeProba
 
 # Numerical floor so log(tau) and log(lambda) stay finite.
@@ -59,17 +60,27 @@ class DixonColesModel(BaseModel):
         xi: float = config.DIXON_COLES_XI,
         ridge: float = config.DIXON_COLES_RIDGE,
         max_goals: int = config.MAX_GOALS_GRID,
+        confederation_pooling: bool = True,
+        ridge_global: float = config.DIXON_COLES_RIDGE_GLOBAL,
     ) -> None:
         """Initialise an unfitted model.
 
         Args:
             xi: Per-day time-decay rate; match weight is ``exp(-xi * age_days)``.
-            ridge: L2 penalty on the attack/defence strength vectors.
+            ridge: L2 penalty on the attack/defence strengths. With
+                ``confederation_pooling`` this shrinks each team toward its
+                confederation mean; otherwise toward zero (the global mean).
             max_goals: Largest goal count modelled in the analytic score grid.
+            confederation_pooling: If True, partial-pool strengths toward the
+                team's confederation mean (helps sparsely-observed teams).
+            ridge_global: Weak L2 anchor toward zero applied alongside the
+                pooling penalty to keep confederation means identifiable.
         """
         self.xi = xi
         self.ridge = ridge
         self.max_goals = max_goals
+        self.confederation_pooling = confederation_pooling
+        self.ridge_global = ridge_global
 
         self.teams: list[str] = []
         self._index: dict[str, int] = {}
@@ -111,6 +122,25 @@ class DixonColesModel(BaseModel):
         # Fold in the explicit competition importance weight too.
         weights = decay * df["match_weight"].to_numpy(dtype=float)
 
+        # Confederation groups for hierarchical (partial-pooling) shrinkage.
+        if self.confederation_pooling:
+            confs = [confederation_of(t) for t in self.teams]
+            conf_index = {c: i for i, c in enumerate(sorted(set(confs)))}
+            conf_ids = np.array([conf_index[c] for c in confs])
+            conf_counts = np.bincount(conf_ids).astype(float)
+
+        def _penalty(attack: np.ndarray, defence: np.ndarray) -> float:
+            if not self.confederation_pooling:
+                return self.ridge * (np.sum(attack**2) + np.sum(defence**2))
+            # Shrink toward the confederation mean, plus a weak global anchor.
+            att_mean = np.bincount(conf_ids, weights=attack) / conf_counts
+            def_mean = np.bincount(conf_ids, weights=defence) / conf_counts
+            att_dev = attack - att_mean[conf_ids]
+            def_dev = defence - def_mean[conf_ids]
+            return self.ridge * (np.sum(att_dev**2) + np.sum(def_dev**2)) + (
+                self.ridge_global * (np.sum(attack**2) + np.sum(defence**2))
+            )
+
         def neg_log_lik(theta: np.ndarray) -> float:
             attack, defence, intercept, home_adv, rho = self._unpack(theta)
             log_lam = intercept + attack[a] - defence[b] + home_adv * is_home
@@ -122,8 +152,7 @@ class DixonColesModel(BaseModel):
             tau = np.clip(_tau(ga, gb, lam, mu, rho), _EPS, None)
             ll = weights * (base + np.log(tau))
 
-            penalty = self.ridge * (np.sum(attack**2) + np.sum(defence**2))
-            return -float(np.sum(ll)) + penalty
+            return -float(np.sum(ll)) + _penalty(attack, defence)
 
         # Initial guess: zero strengths, league-average scoring intercept.
         mean_goals = float(np.mean(np.concatenate([ga, gb])))
