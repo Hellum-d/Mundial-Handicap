@@ -16,7 +16,7 @@ import pandas as pd
 from football_predictor import config
 from football_predictor.data.real_data import load_real_matches
 from football_predictor.evaluation.backtester import Backtester, significance_report
-from football_predictor.output.prediction_engine import PredictionEngine
+from football_predictor.output.prediction_engine import load_or_train_engine
 
 
 def main() -> None:
@@ -44,12 +44,13 @@ def main() -> None:
     print("\n" + significance_report(folds))
 
     print("\n=== Example prediction: Brazil vs Argentina (final) ===")
-    # Fit the example engine on the most recent window for speed and relevance.
+    # Engine fit on the most recent window, cached to disk so repeat runs and
+    # interactive predictions are instant (see `python -m football_predictor.predict`).
     recent_cutoff = matches["date"].max() - pd.DateOffset(
         years=config.TRAIN_WINDOW_YEARS
     )
     recent = matches[matches["date"] >= recent_cutoff]
-    engine = PredictionEngine().fit(recent)
+    engine = load_or_train_engine(recent)
     pred = engine.predict("Brazil", "Argentina", stage="final", neutral=True)
     print(f"  win {pred.team_a}: {pred.win_probability_a:.3f}")
     print(f"  draw          : {pred.draw_probability:.3f}")

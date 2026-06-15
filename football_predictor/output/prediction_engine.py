@@ -18,11 +18,15 @@ for a stacked meta-learner over seven models.
 
 from __future__ import annotations
 
+import warnings
+from pathlib import Path
+
+import joblib
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize_scalar
 
-from football_predictor import config
+from football_predictor import __version__, config
 from football_predictor.models.dixon_coles import DixonColesModel
 from football_predictor.models.elo_model import EloRatingSystem
 from football_predictor.output.schemas import MatchPrediction, Stage
@@ -63,6 +67,35 @@ class PredictionEngine:
         self.elo.fit(matches)
         self.is_fitted = True
         return self
+
+    # -- persistence -------------------------------------------------------
+    def save(self, path: str | Path = config.MODEL_CACHE) -> Path:
+        """Serialise the fitted engine to disk with joblib (version-tagged)."""
+        if not self.is_fitted:
+            raise RuntimeError("Fit the engine before saving.")
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump({"version": __version__, "engine": self}, path)
+        return path
+
+    @classmethod
+    def load(cls, path: str | Path = config.MODEL_CACHE) -> "PredictionEngine":
+        """Load a fitted engine saved by :meth:`save`.
+
+        The Monte-Carlo RNG is reset to a fresh, seeded generator so that
+        predictions are reproducible run-to-run regardless of the sampling
+        state captured at save time.
+        """
+        payload = joblib.load(path)
+        engine = payload["engine"]
+        if payload.get("version") != __version__:
+            warnings.warn(
+                f"Loaded engine version {payload.get('version')!r} differs from "
+                f"current {__version__!r}; predictions may be inconsistent.",
+                stacklevel=2,
+            )
+        engine.mc = MonteCarloEngine(n_sims=engine.mc.n_sims)
+        return engine
 
     def fit_blend(self, validation: pd.DataFrame) -> "PredictionEngine":
         """Fit the convex blend weight on a leak-free validation set (audit #13).
@@ -238,3 +271,26 @@ class PredictionEngine:
         seen = self.dixon_coles._index
         known = int(team_a in seen) + int(team_b in seen)
         return {0: 0.3, 1: 0.6, 2: 0.9}[known]
+
+
+def load_or_train_engine(
+    matches: pd.DataFrame,
+    path: str | Path = config.MODEL_CACHE,
+    regenerate: bool = False,
+) -> PredictionEngine:
+    """Return a fitted engine from the cache, training and caching on a miss.
+
+    The first call fits the base models (the slow step) and serialises them;
+    later calls load the cache, so predictions are effectively instant.
+
+    Args:
+        matches: Training data, used only when (re)fitting.
+        path: Cache location for the serialised engine.
+        regenerate: Force a refit even if the cache exists.
+    """
+    path = Path(path)
+    if path.exists() and not regenerate:
+        return PredictionEngine.load(path)
+    engine = PredictionEngine().fit(matches)
+    engine.save(path)
+    return engine
