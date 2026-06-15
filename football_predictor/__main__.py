@@ -11,18 +11,25 @@ example prediction.
 
 from __future__ import annotations
 
-from football_predictor.data.sample_data import load_matches
+import pandas as pd
+
+from football_predictor import config
+from football_predictor.data.real_data import load_real_matches
 from football_predictor.evaluation.backtester import Backtester
 from football_predictor.output.prediction_engine import PredictionEngine
 
 
 def main() -> None:
-    matches = load_matches()
-    print(f"Loaded {len(matches)} matches "
+    matches = load_real_matches()
+    print(f"Loaded {len(matches)} real matches "
           f"({matches['date'].min().date()} -> {matches['date'].max().date()})\n")
 
     print("=== Temporal back-test (held-out World Cups) ===")
-    folds = Backtester(matches).run()
+    folds = Backtester(
+        matches,
+        train_window_years=config.TRAIN_WINDOW_YEARS,
+        min_test_year=2010,
+    ).run()
     for fold in folds:
         print(fold)
 
@@ -34,7 +41,12 @@ def main() -> None:
         print(f"  {system:<12} {mean_ll:.4f}")
 
     print("\n=== Example prediction: Brazil vs Argentina (final) ===")
-    engine = PredictionEngine().fit(matches)
+    # Fit the example engine on the most recent window for speed and relevance.
+    recent_cutoff = matches["date"].max() - pd.DateOffset(
+        years=config.TRAIN_WINDOW_YEARS
+    )
+    recent = matches[matches["date"] >= recent_cutoff]
+    engine = PredictionEngine().fit(recent)
     pred = engine.predict("Brazil", "Argentina", stage="final", neutral=True)
     print(f"  win {pred.team_a}: {pred.win_probability_a:.3f}")
     print(f"  draw          : {pred.draw_probability:.3f}")

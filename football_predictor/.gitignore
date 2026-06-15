@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Real-dataset caches: regenerated on first run from the public CC0 source.
+data/results_raw.csv
+data/real_matches.csv
