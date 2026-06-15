@@ -12,5 +12,6 @@ from football_predictor.data.sample_data import (
     generate_sample_matches,
     load_matches,
 )
+from football_predictor.data.real_data import load_real_matches
 
-__all__ = ["generate_sample_matches", "load_matches"]
+__all__ = ["generate_sample_matches", "load_matches", "load_real_matches"]

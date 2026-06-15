@@ -43,6 +43,11 @@ class FoldResult:
         return "\n".join(lines)
 
 
+# Tournaments with fewer matches than this are treated as in-progress /
+# incomplete and skipped as test folds (e.g. an ongoing World Cup).
+_MIN_FOLD_MATCHES = 16
+
+
 def _score(probs: np.ndarray, truth: np.ndarray) -> dict[str, float]:
     return {
         "log_loss": metrics.log_loss(probs, truth),
@@ -54,23 +59,46 @@ def _score(probs: np.ndarray, truth: np.ndarray) -> dict[str, float]:
 class Backtester:
     """Run temporal-CV folds and report metrics vs. baselines."""
 
-    def __init__(self, matches: pd.DataFrame, test_competition: str = "world_cup") -> None:
+    def __init__(
+        self,
+        matches: pd.DataFrame,
+        test_competition: str = "world_cup",
+        train_window_years: int | None = None,
+        min_test_year: int | None = None,
+    ) -> None:
         """Initialise with the full match dataset.
 
         Args:
             matches: All historical matches with a ``competition`` column.
             test_competition: Competition value whose tournaments form the
                 held-out test sets (one fold per distinct year).
+            train_window_years: If set, each fold trains only on matches within
+                this many years before the tested tournament (the exponential
+                time-decay makes older matches negligible anyway, and it keeps
+                the fit tractable on the full 49k-row real dataset). ``None``
+                trains on all prior matches.
+            min_test_year: If set, only tournaments from this year onward are
+                evaluated as folds (the modern, data-rich era).
         """
         self.matches = matches.copy()
         self.matches["date"] = pd.to_datetime(self.matches["date"])
         self.matches["year"] = self.matches["date"].dt.year
         self.test_competition = test_competition
+        self.train_window_years = train_window_years
+        self.min_test_year = min_test_year
 
     def test_years(self) -> list[int]:
-        """Years that contain a tournament of the test competition."""
+        """Years with a *complete* tournament of the test competition.
+
+        Skips in-progress tournaments (fewer than ``_MIN_FOLD_MATCHES`` matches)
+        and, if ``min_test_year`` is set, anything before it.
+        """
         mask = self.matches["competition"] == self.test_competition
-        return sorted(self.matches.loc[mask, "year"].unique())
+        counts = self.matches.loc[mask].groupby("year").size()
+        years = [int(y) for y, n in counts.items() if n >= _MIN_FOLD_MATCHES]
+        if self.min_test_year is not None:
+            years = [y for y in years if y >= self.min_test_year]
+        return sorted(years)
 
     def run(self) -> list[FoldResult]:
         """Execute every fold and return per-fold metric breakdowns."""
@@ -84,7 +112,11 @@ class Backtester:
             self.matches["year"] == year
         )
         test = self.matches[is_test]
-        train = self.matches[self.matches["date"] < test["date"].min()]
+        test_start = test["date"].min()
+        train = self.matches[self.matches["date"] < test_start]
+        if self.train_window_years is not None:
+            lo = test_start - pd.DateOffset(years=self.train_window_years)
+            train = train[train["date"] >= lo]
 
         engine = PredictionEngine().fit(train)
         elo_only = EloRatingSystem().fit(train)

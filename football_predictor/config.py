@@ -15,6 +15,18 @@ PROJECT_ROOT: Path = PACKAGE_ROOT.parent
 DATA_DIR: Path = PACKAGE_ROOT / "data"
 SAMPLE_MATCHES_CSV: Path = DATA_DIR / "sample_matches.csv"
 
+# --- Real dataset (martj42 / Kaggle "International results", CC0) -----------
+# Public mirror, no login or scraping required.
+REAL_RESULTS_URL: str = (
+    "https://raw.githubusercontent.com/martj42/international_results/master/results.csv"
+)
+RAW_RESULTS_CSV: Path = DATA_DIR / "results_raw.csv"      # downloaded, untouched
+REAL_MATCHES_CSV: Path = DATA_DIR / "real_matches.csv"    # processed, canonical
+# Only fit on the most recent N years before a fixture: with DIXON_COLES_XI the
+# weight of a 12-year-old match is ~2.5e-4, so older data is both negligible and
+# expensive (the full 49k-row history makes each Dixon-Coles fit ~65s).
+TRAIN_WINDOW_YEARS: int = 12
+
 # --- Dixon-Coles -----------------------------------------------------------
 # Time-decay rate (per day) for match weighting in the MLE fit.
 # xi ~= 0.0019 => a match ~1 year old keeps ~50% weight.
