@@ -46,12 +46,15 @@ class PredictionEngine:
         n_sims: int = config.MC_DEFAULT_SIMS,
         w_monte_carlo: float = config.BLEND_WEIGHT_MONTE_CARLO,
         w_elo: float = config.BLEND_WEIGHT_ELO,
+        draw_gamma: float = 1.0,
     ) -> None:
         self.dixon_coles = DixonColesModel()
         self.elo = EloRatingSystem()
         self.mc = MonteCarloEngine(n_sims=n_sims)
         self.w_mc = w_monte_carlo
         self.w_elo = w_elo
+        # Post-hoc draw-probability multiplier (1 d.o.f.), 1.0 = no adjustment.
+        self.draw_gamma = draw_gamma
         self.is_fitted = False
 
     def fit(self, matches: pd.DataFrame) -> "PredictionEngine":
@@ -104,6 +107,46 @@ class PredictionEngine:
         self.w_elo = 1.0 - self.w_mc
         return self
 
+    def fit_draw_calibration(self, validation: pd.DataFrame) -> "PredictionEngine":
+        """Fit the 1-parameter draw multiplier on a leak-free validation set.
+
+        Tournament draw rates are often systematically mis-estimated. After the
+        blend weight is set, a single factor ``gamma`` rescales the draw
+        probability (``p_draw -> gamma * p_draw``, then renormalise) to minimise
+        validation log loss. One extra degree of freedom — negligible overfit.
+        Call after :meth:`fit_blend`; uses the analytic Dixon-Coles head.
+        """
+        if not self.is_fitted:
+            raise RuntimeError("Call fit() before fit_draw_calibration().")
+        if validation is None or len(validation) == 0:
+            return self
+
+        base, truth = [], []
+        for m in validation.itertuples(index=False):
+            neutral = bool(getattr(m, "neutral", True))
+            dc = self.dixon_coles.predict_proba(m.team_a, m.team_b, neutral=neutral)
+            el = self.elo.predict_proba(m.team_a, m.team_b, neutral=neutral)
+            base.append(
+                [self.w_mc * dc[k] + self.w_elo * el[k]
+                 for k in ("win_a", "draw", "win_b")]
+            )
+            ga, gb = int(m.goals_a), int(m.goals_b)
+            truth.append(0 if ga > gb else 1 if ga == gb else 2)
+
+        base_arr = np.asarray(base)
+        rows = np.arange(len(truth))
+        cols = np.asarray(truth)
+
+        def neg_log_lik(gamma: float) -> float:
+            adj = base_arr.copy()
+            adj[:, 1] *= gamma
+            adj /= adj.sum(axis=1, keepdims=True)
+            return float(-np.mean(np.log(np.clip(adj[rows, cols], 1e-15, 1.0))))
+
+        res = minimize_scalar(neg_log_lik, bounds=(0.2, 5.0), method="bounded")
+        self.draw_gamma = float(res.x)
+        return self
+
     def predict_proba(
         self, team_a: str, team_b: str, *, stage: Stage = "group", neutral: bool = True
     ) -> dict[str, float]:
@@ -131,6 +174,10 @@ class PredictionEngine:
             k: self.w_mc * mc_p[k] + self.w_elo * elo_p[k]
             for k in ("win_a", "draw", "win_b")
         }
+        # Apply the post-hoc draw calibration (group stage only; knockout has
+        # no draw mass to rescale).
+        if stage not in _KNOCKOUT_STAGES:
+            blended["draw"] *= self.draw_gamma
         return _normalise(blended)
 
     def predict(
