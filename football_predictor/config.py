@@ -38,6 +38,10 @@ DIXON_COLES_XI: float = 0.0019
 # between the global intercept and the per-team strengths, and stabilises
 # teams with few matches).
 DIXON_COLES_RIDGE: float = 1e-3
+# With confederation pooling on, DIXON_COLES_RIDGE shrinks each team toward its
+# confederation mean; this weak global ridge additionally anchors the whole set
+# (keeps confederation means from drifting and stabilises tiny confederations).
+DIXON_COLES_RIDGE_GLOBAL: float = 1e-4
 # Maximum goals modelled in the analytic scoreline grid.
 MAX_GOALS_GRID: int = 10
 
