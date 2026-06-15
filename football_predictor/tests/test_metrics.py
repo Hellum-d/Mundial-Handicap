@@ -43,6 +43,23 @@ def test_outcome_index():
     assert metrics.outcome_index(0, 3) == 2
 
 
+def test_split_fold_is_leak_free(sample_matches):
+    """train < validation < test by date, with no row overlap (no leakage)."""
+    bt = Backtester(sample_matches, train_window_years=12)
+    train, validation, test = bt.split_fold(2018)
+
+    assert len(validation) > 0 and len(test) > 0
+    # Strict temporal ordering between the three partitions.
+    assert train["date"].max() < validation["date"].min()
+    assert validation["date"].max() < test["date"].min()
+    # Disjoint row sets.
+    idx = set(train.index) | set(validation.index) | set(test.index)
+    assert len(idx) == len(train) + len(validation) + len(test)
+    # The test fold is exactly the 2018 World Cup.
+    assert (test["competition"] == "world_cup").all()
+    assert (test["date"].dt.year == 2018).all()
+
+
 def test_backtester_ensemble_beats_uniform(sample_matches):
     """The fitted ensemble should beat the uniform baseline on every fold."""
     folds = Backtester(sample_matches).run()

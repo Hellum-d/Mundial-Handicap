@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from football_predictor import config
 from football_predictor.evaluation import metrics
 from football_predictor.models.elo_model import EloRatingSystem
 from football_predictor.output.prediction_engine import PredictionEngine
@@ -65,6 +66,7 @@ class Backtester:
         test_competition: str = "world_cup",
         train_window_years: int | None = None,
         min_test_year: int | None = None,
+        validation_months: int = config.BACKTEST_VALIDATION_MONTHS,
     ) -> None:
         """Initialise with the full match dataset.
 
@@ -79,6 +81,8 @@ class Backtester:
                 trains on all prior matches.
             min_test_year: If set, only tournaments from this year onward are
                 evaluated as folds (the modern, data-rich era).
+            validation_months: Length of the leak-free validation slice carved
+                out immediately before each test tournament (see ``split_fold``).
         """
         self.matches = matches.copy()
         self.matches["date"] = pd.to_datetime(self.matches["date"])
@@ -86,6 +90,7 @@ class Backtester:
         self.test_competition = test_competition
         self.train_window_years = train_window_years
         self.min_test_year = min_test_year
+        self.validation_months = validation_months
 
     def test_years(self) -> list[int]:
         """Years with a *complete* tournament of the test competition.
@@ -99,6 +104,42 @@ class Backtester:
         if self.min_test_year is not None:
             years = [y for y in years if y >= self.min_test_year]
         return sorted(years)
+
+    def split_fold(
+        self, year: int
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Leak-free ``(train, validation, test)`` split for one fold.
+
+        Partitioned strictly by date so nothing downstream can leak the test
+        set into model fitting or calibration:
+
+          * ``test``       = the tested tournament (this competition, this year);
+          * ``validation`` = all matches in the ``validation_months`` window
+            immediately *before* the test tournament — used to fit calibration
+            or blend weights, and disjoint from both train and test;
+          * ``train``      = matches before the validation window (and within
+            ``train_window_years`` of the test, if set).
+
+        Invariant: ``max(train.date) < min(validation.date)`` and
+        ``max(validation.date) < min(test.date)``.
+        """
+        is_test = (self.matches["competition"] == self.test_competition) & (
+            self.matches["year"] == year
+        )
+        test = self.matches[is_test]
+        if test.empty:
+            raise ValueError(f"No {self.test_competition} tournament in {year}.")
+
+        test_start = test["date"].min()
+        val_start = test_start - pd.DateOffset(months=self.validation_months)
+        before_test = self.matches[self.matches["date"] < test_start]
+
+        validation = before_test[before_test["date"] >= val_start]
+        train = before_test[before_test["date"] < val_start]
+        if self.train_window_years is not None:
+            window_start = test_start - pd.DateOffset(years=self.train_window_years)
+            train = train[train["date"] >= window_start]
+        return train, validation, test
 
     def run(self) -> list[FoldResult]:
         """Execute every fold and return per-fold metric breakdowns."""
