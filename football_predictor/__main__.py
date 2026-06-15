@@ -15,7 +15,7 @@ import pandas as pd
 
 from football_predictor import config
 from football_predictor.data.real_data import load_real_matches
-from football_predictor.evaluation.backtester import Backtester
+from football_predictor.evaluation.backtester import Backtester, significance_report
 from football_predictor.output.prediction_engine import PredictionEngine
 
 
@@ -39,6 +39,9 @@ def main() -> None:
     for system in systems:
         mean_ll = sum(f.scores[system]["log_loss"] for f in folds) / len(folds)
         print(f"  {system:<12} {mean_ll:.4f}")
+
+    # Pooled bootstrap CIs — is the ensemble's edge real or noise?
+    print("\n" + significance_report(folds))
 
     print("\n=== Example prediction: Brazil vs Argentina (final) ===")
     # Fit the example engine on the most recent window for speed and relevance.

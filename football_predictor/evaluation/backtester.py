@@ -13,7 +13,7 @@ naive and single-model baselines.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -33,6 +33,8 @@ class FoldResult:
     scores: dict[str, dict[str, float]]  # system -> {log_loss, brier, rps}
     blend_w_mc: float = float("nan")  # fitted Monte-Carlo/Dixon-Coles weight
     draw_gamma: float = float("nan")  # fitted draw-probability multiplier
+    # system -> per-match log loss vector (for pooled bootstrap CIs).
+    per_match_log_loss: dict[str, np.ndarray] = field(default_factory=dict)
 
     def __str__(self) -> str:
         lines = [
@@ -185,14 +187,50 @@ class Backtester:
         truth = np.array(truth)
         uniform = np.full_like(ens_probs, 1.0 / 3.0)
 
+        systems = {"ensemble": ens_probs, "elo_only": elo_probs, "uniform": uniform}
         return FoldResult(
             test_label=f"{self.test_competition} {year}",
             n_matches=len(truth),
-            scores={
-                "ensemble": _score(ens_probs, truth),
-                "elo_only": _score(elo_probs, truth),
-                "uniform": _score(uniform, truth),
-            },
+            scores={k: _score(p, truth) for k, p in systems.items()},
             blend_w_mc=engine.w_mc,
             draw_gamma=engine.draw_gamma,
+            per_match_log_loss={
+                k: metrics.log_loss_per_match(p, truth) for k, p in systems.items()
+            },
         )
+
+
+def significance_report(
+    folds: list[FoldResult], n_boot: int = 10_000, seed: int = 0
+) -> str:
+    """Pool per-match log loss across folds and bootstrap CIs for significance.
+
+    Reports each system's pooled log loss with a 90% bootstrap CI, then the
+    paired ``ensemble - baseline`` difference with its CI. A wholly-negative
+    difference interval means the ensemble is significantly better than that
+    baseline (log loss: lower is better) — the direct answer to "is this gap
+    real or just noise on ~250 matches?".
+    """
+    if not folds:
+        return "No folds to report."
+    systems = ("ensemble", "elo_only", "uniform")
+    pooled = {
+        s: np.concatenate([f.per_match_log_loss[s] for f in folds]) for s in systems
+    }
+    n = len(pooled["ensemble"])
+
+    lines = [f"=== Pooled log loss, 90% bootstrap CI (n={n} matches) ==="]
+    for s in systems:
+        mean, lo, hi = metrics.bootstrap_ci(pooled[s], n_boot=n_boot, seed=seed)
+        lines.append(f"  {s:<12} {mean:.4f}  [{lo:.4f}, {hi:.4f}]")
+
+    lines.append("=== ensemble - baseline (negative = ensemble better) ===")
+    for base in ("elo_only", "uniform"):
+        diff, lo, hi = metrics.bootstrap_diff_ci(
+            pooled["ensemble"], pooled[base], n_boot=n_boot, seed=seed
+        )
+        verdict = "significant" if hi < 0 else ("worse" if lo > 0 else "n.s.")
+        lines.append(
+            f"  ensemble - {base:<9} {diff:+.4f}  [{lo:+.4f}, {hi:+.4f}]  ({verdict})"
+        )
+    return "\n".join(lines)
