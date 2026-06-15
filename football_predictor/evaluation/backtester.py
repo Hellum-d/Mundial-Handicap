@@ -31,9 +31,13 @@ class FoldResult:
     test_label: str
     n_matches: int
     scores: dict[str, dict[str, float]]  # system -> {log_loss, brier, rps}
+    blend_w_mc: float = float("nan")  # fitted Monte-Carlo/Dixon-Coles weight
 
     def __str__(self) -> str:
-        lines = [f"[{self.test_label}]  ({self.n_matches} matches)"]
+        lines = [
+            f"[{self.test_label}]  ({self.n_matches} matches"
+            f", blend w_mc={self.blend_w_mc:.2f})"
+        ]
         for system, m in self.scores.items():
             lines.append(
                 f"  {system:<12} "
@@ -149,18 +153,17 @@ class Backtester:
         return results
 
     def _run_fold(self, year: int) -> FoldResult:
-        is_test = (self.matches["competition"] == self.test_competition) & (
-            self.matches["year"] == year
-        )
-        test = self.matches[is_test]
-        test_start = test["date"].min()
-        train = self.matches[self.matches["date"] < test_start]
-        if self.train_window_years is not None:
-            lo = test_start - pd.DateOffset(years=self.train_window_years)
-            train = train[train["date"] >= lo]
+        train, validation, test = self.split_fold(year)
+        full = pd.concat([train, validation])
 
-        engine = PredictionEngine().fit(train)
-        elo_only = EloRatingSystem().fit(train)
+        # Leak-free blend weight: base models see only `train`, the convex
+        # blend weight is fitted on the disjoint `validation` slice.
+        probe = PredictionEngine().fit(train).fit_blend(validation)
+        # Final models use *all* pre-test data; reuse the learned weight.
+        engine = PredictionEngine(
+            w_monte_carlo=probe.w_mc, w_elo=probe.w_elo
+        ).fit(full)
+        elo_only = EloRatingSystem().fit(full)
 
         ens_probs, elo_probs, truth = [], [], []
         for m in test.itertuples(index=False):
@@ -184,4 +187,5 @@ class Backtester:
                 "elo_only": _score(elo_probs, truth),
                 "uniform": _score(uniform, truth),
             },
+            blend_w_mc=engine.w_mc,
         )

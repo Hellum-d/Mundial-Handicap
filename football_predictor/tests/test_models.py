@@ -75,6 +75,30 @@ def test_engine_predict_returns_valid_schema(sample_matches):
     assert len(pred.top_scorelines) <= 5
 
 
+def test_fit_blend_returns_valid_simplex_weight(sample_matches):
+    train = sample_matches[sample_matches["date"] < "2018-01-01"]
+    validation = sample_matches[
+        (sample_matches["date"] >= "2018-01-01")
+        & (sample_matches["date"] < "2018-06-01")
+    ]
+    engine = PredictionEngine(n_sims=10_000).fit(train).fit_blend(validation)
+    assert 0.0 <= engine.w_mc <= 1.0
+    assert abs(engine.w_mc + engine.w_elo - 1.0) < 1e-9
+
+
+def test_fit_blend_requires_fit(sample_matches):
+    with pytest.raises(RuntimeError):
+        PredictionEngine().fit_blend(sample_matches)
+
+
+def test_fit_blend_empty_validation_keeps_weights(sample_matches):
+    train = sample_matches[sample_matches["date"] < "2018-01-01"]
+    engine = PredictionEngine(n_sims=10_000).fit(train)
+    before = engine.w_mc
+    engine.fit_blend(train.iloc[0:0])  # empty validation
+    assert engine.w_mc == before
+
+
 def test_knockout_has_no_draw(sample_matches):
     engine = PredictionEngine(n_sims=20_000).fit(sample_matches)
     pred = engine.predict("Brazil", "Argentina", stage="final", neutral=True)
