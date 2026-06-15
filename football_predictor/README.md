@@ -40,6 +40,7 @@ uniform/Elo baselines, not beating the market.
 | Monte-Carlo engine | `simulation/monte_carlo.py` | 100k fully-vectorised Poisson sims; outcomes, scorelines, secondary markets, knockout AET + penalties. |
 | Prediction engine | `output/prediction_engine.py` | Blends the two heads via a **1-parameter convex blend** (`w_mc + w_elo = 1`), fitted on a leak-free validation set (`fit_blend`); optional post-hoc draw calibration (`fit_draw_calibration`, off by default). joblib `save`/`load` so fitted engines persist and predictions are instant. |
 | Predict CLI | `predict.py` | `python -m football_predictor.predict A B [--stage …] [--home]` — instant single-match prediction from the cached engine. |
+| Web UI | `webapp.py` | `python -m football_predictor.webapp` → http://127.0.0.1:5000 — form + CSS bar charts (probabilities, scorelines, markets), offline, cached engine. |
 | Market utilities | `market.py` | De-vig (proportional + Shin) and convex market-prior blend, for when an odds feed is available (none in the default dataset). |
 | Output schema | `output/schemas.py` | Pydantic `MatchPrediction`; enforces probabilities sum to 1 and ranges. |
 | Metrics | `evaluation/metrics.py` | Log loss (primary), Brier, RPS; bootstrap CIs and paired significance tests. |
@@ -50,6 +51,7 @@ uniform/Elo baselines, not beating the market.
 ```bash
 python -m football_predictor          # back-test on real data + an example prediction
 python -m football_predictor.predict "Brazil" "Argentina" --stage final  # instant prediction
+python -m football_predictor.webapp   # browser UI at http://127.0.0.1:5000
 python -m football_predictor.data.real_data    # (re)download + cache the real dataset
 python -m pytest football_predictor/tests -q   # 53 offline tests
 ```
