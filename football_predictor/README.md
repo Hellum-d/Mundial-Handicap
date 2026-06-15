@@ -38,7 +38,8 @@ uniform/Elo baselines, not beating the market.
 | Dixon-Coles bivariate Poisson | `models/dixon_coles.py` | Time-decayed, ridge-regularised MLE with the low-score `tau` correction; **confederation partial-pooling** of strengths; the scoreline engine. |
 | Dynamic Elo | `models/elo_model.py` | Walk-forward, importance-weighted K-factor, Clark margin multiplier; strong baseline / second opinion. |
 | Monte-Carlo engine | `simulation/monte_carlo.py` | 100k fully-vectorised Poisson sims; outcomes, scorelines, secondary markets, knockout AET + penalties. |
-| Prediction engine | `output/prediction_engine.py` | Blends the two heads via a **1-parameter convex blend** (`w_mc + w_elo = 1`), fitted on a leak-free validation set (`fit_blend`); optional post-hoc draw calibration (`fit_draw_calibration`, off by default). |
+| Prediction engine | `output/prediction_engine.py` | Blends the two heads via a **1-parameter convex blend** (`w_mc + w_elo = 1`), fitted on a leak-free validation set (`fit_blend`); optional post-hoc draw calibration (`fit_draw_calibration`, off by default). joblib `save`/`load` so fitted engines persist and predictions are instant. |
+| Predict CLI | `predict.py` | `python -m football_predictor.predict A B [--stage …] [--home]` — instant single-match prediction from the cached engine. |
 | Market utilities | `market.py` | De-vig (proportional + Shin) and convex market-prior blend, for when an odds feed is available (none in the default dataset). |
 | Output schema | `output/schemas.py` | Pydantic `MatchPrediction`; enforces probabilities sum to 1 and ranges. |
 | Metrics | `evaluation/metrics.py` | Log loss (primary), Brier, RPS; bootstrap CIs and paired significance tests. |
@@ -48,13 +49,16 @@ uniform/Elo baselines, not beating the market.
 
 ```bash
 python -m football_predictor          # back-test on real data + an example prediction
+python -m football_predictor.predict "Brazil" "Argentina" --stage final  # instant prediction
 python -m football_predictor.data.real_data    # (re)download + cache the real dataset
-python -m pytest football_predictor/tests -q   # 49 offline tests
+python -m pytest football_predictor/tests -q   # 53 offline tests
 ```
 
-The first run downloads the dataset (~3.7 MB, CC0) and caches it under
-`data/`; those caches are git-ignored and regenerated on demand. The test suite
-is fully offline (synthetic + in-memory fixtures).
+The first run downloads the dataset (~3.7 MB, CC0) and caches it under `data/`,
+and the first prediction fits and caches the engine (`data/engine.joblib`, via
+joblib) — so subsequent predictions are effectively instant (no refit). Those
+caches are git-ignored and regenerated on demand. The test suite is fully
+offline (synthetic + in-memory fixtures).
 
 Real-data back-test (held-out World Cups 2010–2022, 64 matches each, 12y
 training window):
