@@ -34,6 +34,15 @@
       "justMyCode": true
     },
     {
+      "name": "Web app (browser UI)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "football_predictor.webapp",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
       "name": "Regenerate dataset cache",
       "type": "debugpy",
       "request": "launch",
