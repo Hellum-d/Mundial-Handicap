@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 
 from football_predictor.evaluation import metrics
 from football_predictor.evaluation.backtester import Backtester
@@ -41,6 +42,41 @@ def test_outcome_index():
     assert metrics.outcome_index(2, 0) == 0
     assert metrics.outcome_index(1, 1) == 1
     assert metrics.outcome_index(0, 3) == 2
+
+
+def test_log_loss_per_match_mean_matches_log_loss():
+    probs = np.array([[0.6, 0.3, 0.1], [0.2, 0.3, 0.5], [0.3, 0.4, 0.3]])
+    truth = np.array([0, 2, 1])
+    per = metrics.log_loss_per_match(probs, truth)
+    assert per.shape == (3,)
+    assert abs(per.mean() - metrics.log_loss(probs, truth)) < 1e-12
+
+
+def test_bootstrap_ci_brackets_mean_and_is_deterministic():
+    vals = np.array([0.5, 1.0, 1.5, 2.0, 0.8, 1.2])
+    mean, lo, hi = metrics.bootstrap_ci(vals, n_boot=2000, seed=1)
+    assert lo <= mean <= hi
+    # Reproducible with the same seed.
+    assert (mean, lo, hi) == metrics.bootstrap_ci(vals, n_boot=2000, seed=1)
+
+
+def test_bootstrap_ci_constant_array_has_zero_width():
+    vals = np.full(20, 0.7)
+    mean, lo, hi = metrics.bootstrap_ci(vals, n_boot=500, seed=3)
+    assert mean == pytest.approx(0.7) and (hi - lo) == pytest.approx(0.0)
+
+
+def test_bootstrap_diff_ci_detects_consistent_winner():
+    # `a` is always smaller than `b` -> a - b is significantly negative.
+    a = np.array([0.1, 0.2, 0.15, 0.12, 0.18])
+    b = np.array([0.9, 0.8, 0.95, 0.85, 0.88])
+    diff, lo, hi = metrics.bootstrap_diff_ci(a, b, n_boot=2000, seed=2)
+    assert diff < 0 and hi < 0  # wholly-negative interval => significant
+
+
+def test_bootstrap_diff_ci_requires_equal_shapes():
+    with pytest.raises(ValueError):
+        metrics.bootstrap_diff_ci(np.zeros(3), np.zeros(4))
 
 
 def test_split_fold_is_leak_free(sample_matches):

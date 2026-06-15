@@ -5,7 +5,11 @@ from football_predictor.evaluation.metrics import (
     log_loss,
     ranked_probability_score,
 )
-from football_predictor.evaluation.backtester import Backtester, FoldResult
+from football_predictor.evaluation.backtester import (
+    Backtester,
+    FoldResult,
+    significance_report,
+)
 
 __all__ = [
     "log_loss",
@@ -13,4 +17,5 @@ __all__ = [
     "ranked_probability_score",
     "Backtester",
     "FoldResult",
+    "significance_report",
 ]

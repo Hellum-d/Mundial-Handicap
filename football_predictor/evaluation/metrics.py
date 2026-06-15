@@ -57,6 +57,58 @@ def ranked_probability_score(probs: np.ndarray, truth: np.ndarray) -> float:
     return float(np.mean(np.sum((cum_p - cum_y) ** 2, axis=1) / (p.shape[1] - 1)))
 
 
+def log_loss_per_match(probs: np.ndarray, truth: np.ndarray) -> np.ndarray:
+    """Per-match log loss contributions ``-log(p_true)`` (mean = log loss).
+
+    Returned as a vector so it can be bootstrap-resampled for confidence
+    intervals on the aggregate metric.
+    """
+    p, y = _as_arrays(probs, truth)
+    p = np.clip(p, _EPS, 1.0)
+    return -np.log(p[np.arange(len(y)), y])
+
+
+def bootstrap_ci(
+    values: np.ndarray, n_boot: int = 10_000, alpha: float = 0.10, seed: int = 0
+) -> tuple[float, float, float]:
+    """Bootstrap ``(mean, lo, hi)`` for the mean of per-sample ``values``.
+
+    ``lo``/``hi`` are the central ``1 - alpha`` percentile interval of the
+    resampled means (default 90%).
+    """
+    values = np.asarray(values, dtype=float)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(values), size=(n_boot, len(values)))
+    means = values[idx].mean(axis=1)
+    lo, hi = np.percentile(means, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float(values.mean()), float(lo), float(hi)
+
+
+def bootstrap_diff_ci(
+    a: np.ndarray,
+    b: np.ndarray,
+    n_boot: int = 10_000,
+    alpha: float = 0.10,
+    seed: int = 0,
+) -> tuple[float, float, float]:
+    """Paired bootstrap ``(mean, lo, hi)`` for ``mean(a - b)``.
+
+    Uses the *same* resampled match indices for ``a`` and ``b`` (paired), so the
+    interval reflects per-match correlation between the two systems. For log
+    loss (lower is better), a wholly-negative interval means ``a`` is
+    significantly better than ``b``.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError("a and b must have the same shape (paired samples).")
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(a), size=(n_boot, len(a)))
+    diffs = (a[idx] - b[idx]).mean(axis=1)
+    lo, hi = np.percentile(diffs, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float((a - b).mean()), float(lo), float(hi)
+
+
 def outcome_index(goals_a: int, goals_b: int) -> int:
     """Map a scoreline to a class index: win_a=0, draw=1, win_b=2."""
     if goals_a > goals_b:
