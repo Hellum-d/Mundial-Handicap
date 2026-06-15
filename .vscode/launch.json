@@ -1,0 +1,75 @@
+{
+  // VS Code run/debug configs. All run as MODULES from the project root so the
+  // `football_predictor` package imports resolve correctly. Pick one in the
+  // Run and Debug panel (Ctrl+Shift+D) and press F5.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Demo: backtest + example prediction",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "football_predictor",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Predict: Brazil vs Argentina (final)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "football_predictor.predict",
+      "args": ["Brazil", "Argentina", "--stage", "final"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Predict: choose teams (prompts)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "football_predictor.predict",
+      "args": ["${input:teamA}", "${input:teamB}", "--stage", "${input:stage}"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Regenerate dataset cache",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "football_predictor.data.real_data",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Pytest: all tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["football_predictor/tests", "-q"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "teamA",
+      "type": "promptString",
+      "description": "Home / first team (e.g. Brazil)"
+    },
+    {
+      "id": "teamB",
+      "type": "promptString",
+      "description": "Away / second team (e.g. Argentina)"
+    },
+    {
+      "id": "stage",
+      "type": "pickString",
+      "description": "Match stage",
+      "options": ["group", "r16", "qf", "sf", "third_place", "final"],
+      "default": "group"
+    }
+  ]
+}
