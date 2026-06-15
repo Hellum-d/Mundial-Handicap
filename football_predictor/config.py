@@ -23,10 +23,10 @@ REAL_RESULTS_URL: str = (
 RAW_RESULTS_CSV: Path = DATA_DIR / "results_raw.csv"      # downloaded, untouched
 REAL_MATCHES_CSV: Path = DATA_DIR / "real_matches.csv"    # processed, canonical
 MODEL_CACHE: Path = DATA_DIR / "engine.joblib"            # fitted engine cache
-# Only fit on the most recent N years before a fixture: with DIXON_COLES_XI the
-# weight of a 12-year-old match is ~2.5e-4, so older data is both negligible and
-# expensive (the full 49k-row history makes each Dixon-Coles fit ~65s).
-TRAIN_WINDOW_YEARS: int = 12
+# Only fit on the most recent N years before a fixture. Set to 5 to weight
+# current form heavily (the Dixon-Coles time-decay further down-weights within
+# the window); a shorter window also makes each fit faster.
+TRAIN_WINDOW_YEARS: int = 5
 # Length of the leak-free validation slice carved out immediately before each
 # test tournament (used to fit calibration / blend weights, never the test set).
 BACKTEST_VALIDATION_MONTHS: int = 12
