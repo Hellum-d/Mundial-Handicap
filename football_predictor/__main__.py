@@ -51,8 +51,8 @@ def main() -> None:
     print(f"  win {pred.team_a}: {pred.win_probability_a:.3f}")
     print(f"  draw          : {pred.draw_probability:.3f}")
     print(f"  win {pred.team_b}: {pred.win_probability_b:.3f}")
-    print(f"  xG: {pred.xg_a:.2f} (90% CI {pred.xg_a_ci_90}) vs "
-          f"{pred.xg_b:.2f} (90% CI {pred.xg_b_ci_90})")
+    print(f"  xG: {pred.xg_a:.2f} (90% goals PI {pred.goals_a_pi_90}) vs "
+          f"{pred.xg_b:.2f} (90% goals PI {pred.goals_b_pi_90})")
     print(f"  over 2.5: {pred.over_2_5_probability:.3f}  "
           f"BTTS: {pred.btts_probability:.3f}")
     print(f"  top scorelines: {pred.top_scorelines}")
