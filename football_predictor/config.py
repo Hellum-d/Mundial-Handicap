@@ -26,6 +26,9 @@ REAL_MATCHES_CSV: Path = DATA_DIR / "real_matches.csv"    # processed, canonical
 # weight of a 12-year-old match is ~2.5e-4, so older data is both negligible and
 # expensive (the full 49k-row history makes each Dixon-Coles fit ~65s).
 TRAIN_WINDOW_YEARS: int = 12
+# Length of the leak-free validation slice carved out immediately before each
+# test tournament (used to fit calibration / blend weights, never the test set).
+BACKTEST_VALIDATION_MONTHS: int = 12
 
 # --- Dixon-Coles -----------------------------------------------------------
 # Time-decay rate (per day) for match weighting in the MLE fit.
