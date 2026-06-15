@@ -34,11 +34,13 @@ class MatchPrediction(BaseModel):
     draw_probability: float = Field(ge=0.0, le=1.0)
     win_probability_b: float = Field(ge=0.0, le=1.0)
 
-    # Expected goals with 90% confidence intervals
+    # Expected goals (xg_*) with the 90% prediction interval on realized goals.
+    # The interval is a Poisson prediction interval over the goal count, not a
+    # confidence interval on the expected-goals parameter.
     xg_a: float = Field(ge=0.0)
     xg_b: float = Field(ge=0.0)
-    xg_a_ci_90: tuple[float, float]
-    xg_b_ci_90: tuple[float, float]
+    goals_a_pi_90: tuple[float, float]
+    goals_b_pi_90: tuple[float, float]
 
     # Scorelines (top 5, descending probability)
     top_scorelines: list[dict]

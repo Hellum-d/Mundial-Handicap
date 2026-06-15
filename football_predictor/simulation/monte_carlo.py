@@ -35,8 +35,10 @@ class MonteCarloResult:
     win_b: float
     xg_a: float
     xg_b: float
-    xg_a_ci_90: tuple[float, float]
-    xg_b_ci_90: tuple[float, float]
+    # 90% *prediction* interval on the realized goal count (Poisson sampling
+    # spread), not a confidence interval on the expected-goals parameter.
+    goals_a_pi_90: tuple[float, float]
+    goals_b_pi_90: tuple[float, float]
     over_2_5: float
     btts: float
     p_team_a_scores: float
@@ -94,11 +96,11 @@ class MonteCarloEngine:
         clean_sheet_a = float(np.mean(goals_b == 0))
         clean_sheet_b = float(np.mean(goals_a == 0))
 
-        xg_a_ci = (
+        goals_a_pi = (
             float(np.percentile(goals_a, 5)),
             float(np.percentile(goals_a, 95)),
         )
-        xg_b_ci = (
+        goals_b_pi = (
             float(np.percentile(goals_b, 5)),
             float(np.percentile(goals_b, 95)),
         )
@@ -127,8 +129,8 @@ class MonteCarloEngine:
             win_b=win_b,
             xg_a=float(np.mean(goals_a)),
             xg_b=float(np.mean(goals_b)),
-            xg_a_ci_90=xg_a_ci,
-            xg_b_ci_90=xg_b_ci,
+            goals_a_pi_90=goals_a_pi,
+            goals_b_pi_90=goals_b_pi,
             over_2_5=over_2_5,
             btts=btts,
             p_team_a_scores=p_a_scores,
