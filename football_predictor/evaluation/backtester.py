@@ -74,6 +74,7 @@ class Backtester:
         train_window_years: int | None = None,
         min_test_year: int | None = None,
         validation_months: int = config.BACKTEST_VALIDATION_MONTHS,
+        calibrate_draw: bool = False,
     ) -> None:
         """Initialise with the full match dataset.
 
@@ -90,6 +91,13 @@ class Backtester:
                 evaluated as folds (the modern, data-rich era).
             validation_months: Length of the leak-free validation slice carved
                 out immediately before each test tournament (see ``split_fold``).
+            calibrate_draw: Whether to fit the post-hoc draw multiplier on the
+                validation slice. **Off by default**: on this data it hurts the
+                held-out metric (mean log loss 1.0038 -> 1.0077) because the
+                pre-tournament validation matches (qualifiers/friendlies) have a
+                different draw distribution than World Cup matches, so the fitted
+                gamma generalises poorly. Kept available for when a World-Cup-like
+                validation set exists.
         """
         self.matches = matches.copy()
         self.matches["date"] = pd.to_datetime(self.matches["date"])
@@ -98,6 +106,7 @@ class Backtester:
         self.train_window_years = train_window_years
         self.min_test_year = min_test_year
         self.validation_months = validation_months
+        self.calibrate_draw = calibrate_draw
 
     def test_years(self) -> list[int]:
         """Years with a *complete* tournament of the test competition.
@@ -160,13 +169,11 @@ class Backtester:
         full = pd.concat([train, validation])
 
         # Leak-free calibration: base models see only `train`; the blend weight
-        # and draw multiplier are fitted on the disjoint `validation` slice.
-        probe = (
-            PredictionEngine()
-            .fit(train)
-            .fit_blend(validation)
-            .fit_draw_calibration(validation)
-        )
+        # (and optionally the draw multiplier) are fitted on the disjoint
+        # `validation` slice.
+        probe = PredictionEngine().fit(train).fit_blend(validation)
+        if self.calibrate_draw:
+            probe.fit_draw_calibration(validation)
         # Final models use *all* pre-test data; reuse the learned parameters.
         engine = PredictionEngine(
             w_monte_carlo=probe.w_mc, w_elo=probe.w_elo, draw_gamma=probe.draw_gamma
