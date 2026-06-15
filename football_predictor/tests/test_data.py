@@ -6,7 +6,16 @@ import numpy as np
 import pandas as pd
 
 from football_predictor.data.confederations import confederation_of
+from football_predictor.data.flags import flag_code
 from football_predictor.data.real_data import classify_tournament, process
+
+
+def test_flag_code_mapping():
+    assert flag_code("Brazil") == "br"
+    assert flag_code("England") == "gb-eng"  # subdivision code
+    assert flag_code("South Korea") == "kr"
+    assert flag_code("United States") == "us"
+    assert flag_code("Atlantis") is None  # unmapped -> no flag
 
 
 def test_confederation_of_mapping():

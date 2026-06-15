@@ -17,12 +17,30 @@ from __future__ import annotations
 
 import pandas as pd
 from flask import Flask, render_template_string, request
+from markupsafe import Markup
 
 from football_predictor import config
+from football_predictor.data.flags import flag_code
 from football_predictor.data.real_data import load_real_matches
 from football_predictor.output.prediction_engine import load_or_train_engine
 
 app = Flask(__name__)
+
+
+def _flag(team: str) -> Markup:
+    """Safe flag-image HTML for a team (empty if unmapped).
+
+    The code comes from a fixed lookup (never user input), so it is safe to
+    mark as HTML; team names elsewhere stay auto-escaped. The image degrades
+    gracefully to nothing when offline (``onerror`` hides it).
+    """
+    code = flag_code(team)
+    if not code:
+        return Markup("")
+    return Markup(
+        f'<img class="flag" src="https://flagcdn.com/24x18/{code}.png" '
+        f'alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+    )
 
 _STAGES = [
     ("group", "Fase de grupos"),
@@ -78,6 +96,8 @@ _PAGE = """
   .chk { display:flex; align-items:center; gap:8px; color:var(--muted);
          font-size:.9rem; }
   .matchup { font-size:1.15rem; font-weight:700; margin: 0 0 16px; }
+  .flag { height: .95em; width: auto; vertical-align: -2px; margin-right: 6px;
+          border-radius: 2px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
   .bar { margin: 10px 0; }
   .bar .top { display:flex; justify-content:space-between; font-size:.9rem;
               margin-bottom:5px; }
@@ -145,12 +165,12 @@ _PAGE = """
 
   {% if pred %}
   <div class="card">
-    <p class="matchup">{{ pred.team_a }} vs {{ pred.team_b }}
+    <p class="matchup">{{ flag_a }}{{ pred.team_a }} &nbsp;vs&nbsp; {{ flag_b }}{{ pred.team_b }}
        <span class="muted">· {{ stage_label }}</span></p>
 
     {% for bar in outcome_bars %}
     <div class="bar">
-      <div class="top"><span>{{ bar.label }}</span><span>{{ '%.1f'|format(bar.pct) }}%</span></div>
+      <div class="top"><span>{{ bar.flag }}{{ bar.label }}</span><span>{{ '%.1f'|format(bar.pct) }}%</span></div>
       <div class="track"><div class="fill"
            style="width: {{ bar.pct }}%; background: {{ bar.color }};"></div></div>
     </div>
@@ -206,7 +226,7 @@ def index():
         teams=teams, stages=_STAGES, team_a=team_a, team_b=team_b,
         stage=stage, home=home, pred=None, error=None,
         stage_label=dict(_STAGES).get(stage, stage),
-        outcome_bars=[], markets=[],
+        outcome_bars=[], markets=[], flag_a=Markup(""), flag_b=Markup(""),
     )
 
     if team_a and team_b:
@@ -215,13 +235,15 @@ def index():
         else:
             pred = engine.predict(team_a, team_b, stage=stage, neutral=not home)
             ctx["pred"] = pred
+            ctx["flag_a"] = _flag(pred.team_a)
+            ctx["flag_b"] = _flag(pred.team_b)
             ctx["outcome_bars"] = [
                 {"label": f"Gana {pred.team_a}", "pct": pred.win_probability_a * 100,
-                 "color": "var(--a)"},
+                 "color": "var(--a)", "flag": ctx["flag_a"]},
                 {"label": "Empate", "pct": pred.draw_probability * 100,
-                 "color": "var(--d)"},
+                 "color": "var(--d)", "flag": Markup("")},
                 {"label": f"Gana {pred.team_b}", "pct": pred.win_probability_b * 100,
-                 "color": "var(--b)"},
+                 "color": "var(--b)", "flag": ctx["flag_b"]},
             ]
             ctx["markets"] = [
                 {"label": "Más de 2.5 goles", "pct": pred.over_2_5_probability * 100},
