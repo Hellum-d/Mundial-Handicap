@@ -107,8 +107,9 @@ Done: real-data ingestion (results), Dixon-Coles + Elo, Monte Carlo, the
 leak-free back-tester, and the fitted convex blend. Still ahead, in rough
 priority order:
 
-1. **Market prior** — de-vigged bookmaker implied probabilities as a
-   feature/prior (highest expected accuracy ROI).
+1. **Market prior** — de-vig + blend utilities exist (`market.py`: proportional
+   and Shin de-vigging, convex market blend); still needs a live odds feed
+   wired in (the results-only default dataset has none). Highest accuracy ROI.
 2. **Richer ingestion + feature store** — StatsBomb/Elo/ratings feeds and the
    engineered features (xG form, defensive/GK, player-level, contextual),
    behind a `DataQualityPipeline`.
