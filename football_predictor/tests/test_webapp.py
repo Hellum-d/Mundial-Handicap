@@ -28,7 +28,7 @@ def test_prediction_page_renders(client):
     r = client.get("/?team_a=Brazil&team_b=Ghana&stage=group")
     html = r.get_data(as_text=True)
     assert r.status_code == 200
-    assert "Brazil vs Ghana" in html
+    assert "Brazil" in html and "Ghana" in html
     assert "Gana Brazil" in html and "Mercados" in html
 
 
@@ -43,3 +43,11 @@ def test_knockout_draw_bar_is_zero(client):
 def test_same_team_is_rejected(client):
     r = client.get("/?team_a=Brazil&team_b=Brazil")
     assert "distintos" in r.get_data(as_text=True)
+
+
+def test_flags_render_for_known_teams(client):
+    html = client.get("/?team_a=Brazil&team_b=Argentina&stage=group").get_data(
+        as_text=True
+    )
+    assert "flagcdn.com/24x18/br.png" in html
+    assert "flagcdn.com/24x18/ar.png" in html
