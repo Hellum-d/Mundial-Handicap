@@ -91,6 +91,39 @@ def test_fit_blend_requires_fit(sample_matches):
         PredictionEngine().fit_blend(sample_matches)
 
 
+def test_fit_draw_calibration_in_bounds(sample_matches):
+    train = sample_matches[sample_matches["date"] < "2018-01-01"]
+    validation = sample_matches[
+        (sample_matches["date"] >= "2018-01-01")
+        & (sample_matches["date"] < "2018-06-01")
+    ]
+    engine = PredictionEngine(n_sims=10_000).fit(train)
+    engine.fit_blend(validation).fit_draw_calibration(validation)
+    assert 0.2 <= engine.draw_gamma <= 5.0
+
+
+def test_draw_gamma_scales_draw_probability(sample_matches):
+    train = sample_matches[sample_matches["date"] < "2018-01-01"]
+    eng = PredictionEngine(n_sims=20_000).fit(train)
+    p1 = eng.predict_proba("Brazil", "Argentina", stage="group", neutral=True)
+    eng.draw_gamma = 2.0
+    p2 = eng.predict_proba("Brazil", "Argentina", stage="group", neutral=True)
+    assert p2["draw"] > p1["draw"]
+
+
+def test_draw_gamma_ignored_in_knockout(sample_matches):
+    train = sample_matches[sample_matches["date"] < "2018-01-01"]
+    eng = PredictionEngine(n_sims=20_000).fit(train)
+    eng.draw_gamma = 3.0
+    p = eng.predict_proba("Brazil", "Argentina", stage="final", neutral=True)
+    assert p["draw"] == 0.0
+
+
+def test_fit_draw_calibration_requires_fit(sample_matches):
+    with pytest.raises(RuntimeError):
+        PredictionEngine().fit_draw_calibration(sample_matches)
+
+
 def test_fit_blend_empty_validation_keeps_weights(sample_matches):
     train = sample_matches[sample_matches["date"] < "2018-01-01"]
     engine = PredictionEngine(n_sims=10_000).fit(train)

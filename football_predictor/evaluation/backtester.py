@@ -32,11 +32,12 @@ class FoldResult:
     n_matches: int
     scores: dict[str, dict[str, float]]  # system -> {log_loss, brier, rps}
     blend_w_mc: float = float("nan")  # fitted Monte-Carlo/Dixon-Coles weight
+    draw_gamma: float = float("nan")  # fitted draw-probability multiplier
 
     def __str__(self) -> str:
         lines = [
             f"[{self.test_label}]  ({self.n_matches} matches"
-            f", blend w_mc={self.blend_w_mc:.2f})"
+            f", blend w_mc={self.blend_w_mc:.2f}, draw_gamma={self.draw_gamma:.2f})"
         ]
         for system, m in self.scores.items():
             lines.append(
@@ -156,12 +157,17 @@ class Backtester:
         train, validation, test = self.split_fold(year)
         full = pd.concat([train, validation])
 
-        # Leak-free blend weight: base models see only `train`, the convex
-        # blend weight is fitted on the disjoint `validation` slice.
-        probe = PredictionEngine().fit(train).fit_blend(validation)
-        # Final models use *all* pre-test data; reuse the learned weight.
+        # Leak-free calibration: base models see only `train`; the blend weight
+        # and draw multiplier are fitted on the disjoint `validation` slice.
+        probe = (
+            PredictionEngine()
+            .fit(train)
+            .fit_blend(validation)
+            .fit_draw_calibration(validation)
+        )
+        # Final models use *all* pre-test data; reuse the learned parameters.
         engine = PredictionEngine(
-            w_monte_carlo=probe.w_mc, w_elo=probe.w_elo
+            w_monte_carlo=probe.w_mc, w_elo=probe.w_elo, draw_gamma=probe.draw_gamma
         ).fit(full)
         elo_only = EloRatingSystem().fit(full)
 
@@ -188,4 +194,5 @@ class Backtester:
                 "uniform": _score(uniform, truth),
             },
             blend_w_mc=engine.w_mc,
+            draw_gamma=engine.draw_gamma,
         )
