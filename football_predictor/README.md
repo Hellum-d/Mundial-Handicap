@@ -44,7 +44,7 @@ uniform/Elo baselines, not beating the market.
 | Market utilities | `market.py` | De-vig (proportional + Shin) and convex market-prior blend, for when an odds feed is available (none in the default dataset). |
 | Output schema | `output/schemas.py` | Pydantic `MatchPrediction`; enforces probabilities sum to 1 and ranges. |
 | Metrics | `evaluation/metrics.py` | Log loss (primary), Brier, RPS; bootstrap CIs and paired significance tests. |
-| Back-tester | `evaluation/backtester.py` | Temporal CV with leak-free `train / validation / test` splits (`split_fold`), a 12-year training window, modern-era fold selection, and a pooled bootstrap `significance_report`. |
+| Back-tester | `evaluation/backtester.py` | Temporal CV with leak-free `train / validation / test` splits (`split_fold`), a configurable training window (`config.TRAIN_WINDOW_YEARS`, currently 2 years), modern-era fold selection, and a pooled bootstrap `significance_report`. |
 
 ## Quick start
 
@@ -53,7 +53,7 @@ python -m football_predictor          # back-test on real data + an example pred
 python -m football_predictor.predict "Brazil" "Argentina" --stage final  # instant prediction
 python -m football_predictor.webapp   # browser UI at http://127.0.0.1:5000
 python -m football_predictor.data.real_data    # (re)download + cache the real dataset
-python -m pytest football_predictor/tests -q   # 53 offline tests
+python -m pytest football_predictor/tests -q   # 59 offline tests
 ```
 
 The first run downloads the dataset (~3.7 MB, CC0) and caches it under `data/`,
@@ -62,7 +62,7 @@ joblib) — so subsequent predictions are effectively instant (no refit). Those
 caches are git-ignored and regenerated on demand. The test suite is fully
 offline (synthetic + in-memory fixtures).
 
-Real-data back-test (held-out World Cups 2010–2022, 64 matches each, 12y
+Real-data back-test (held-out World Cups 2010–2022, 64 matches each, measured with a 12y
 training window):
 
 ```
@@ -98,7 +98,7 @@ a number to oversell.
   the test World Cup is never seen during any fitting. Elo is walked forward in
   date order.
 - **Recency dominates.** Dixon-Coles applies an exponential time-decay
-  (`config.DIXON_COLES_XI`, ~1-year half-life); a 12-year training window drops
+  (`config.DIXON_COLES_XI`, ~1-year half-life); a short training window (`config.TRAIN_WINDOW_YEARS`) drops
   data that is both negligible under the decay and expensive to fit.
 - **A 1-parameter blend, not a stack.** With two models and ~64-match test eras
   a convex simplex blend (always a valid distribution, one degree of freedom)
